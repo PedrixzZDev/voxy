@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core.rendering.util;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.gl.GlFence;
 import me.cortex.voxy.client.core.gl.GlPersistentMappedBuffer;
@@ -83,6 +84,13 @@ public class UploadStream {
                 int attempts = 10;
                 while (--attempts != 0 && this.caddr == SIZE_LIMIT) {
                     glFinish();
+                    // Evitar glFinish() em software rasterizers - usar memory barrier em vez
+                    if (Capabilities.INSTANCE.isLowEndGPU) {
+                        glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+                        Thread.yield(); // Dar tempo ao rasterizador
+                    } else {
+                        glFinish();
+                    }
                     this.tick(false);
                     this.caddr = this.allocationArena.alloc((int) size);
                 }

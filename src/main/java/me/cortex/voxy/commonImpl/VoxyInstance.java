@@ -6,6 +6,7 @@ import me.cortex.voxy.common.thread.ServiceThreadPool;
 import me.cortex.voxy.common.util.MemoryBuffer;
 import me.cortex.voxy.common.world.WorldEngine;
 import me.cortex.voxy.common.world.service.SectionSavingService;
+import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.common.world.service.VoxelIngestService;
 
 import java.lang.ref.WeakReference;
@@ -54,6 +55,18 @@ public abstract class VoxyInstance {
         this.worldCleaner.setName("Active world cleaner");
         this.worldCleaner.setDaemon(true);
         this.worldCleaner.start();
+    }
+
+    public void updateDedicatedThreads() {
+        this.setNumThreads(3);
+        // Ajustar número de threads baseado na plataforma
+        // llvmpipe e GPUs low-end tendem a ter contexto compartilhado, não precisa muitas threads
+        int threads = 3;
+        if (Capabilities.INSTANCE.isLowEndGPU) {
+            threads = Math.max(1, Runtime.getRuntime().availableProcessors() / 4);
+            Logger.info("Low-end GPU detected, reducing dedicated threads to " + threads);
+        }
+        this.setNumThreads(threads);
     }
 
     protected ImportManager createImportManager() {

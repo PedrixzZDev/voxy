@@ -4,6 +4,7 @@ import it.unimi.dsi.fastutil.ints.IntArrayFIFOQueue;
 import it.unimi.dsi.fastutil.objects.ObjectArrayFIFOQueue;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.rendering.util.DownloadStream;
 import me.cortex.voxy.common.util.MemoryBuffer;
 import me.cortex.voxy.common.util.Pair;
@@ -57,10 +58,23 @@ public class GPUTiming {
     private static final class GlTimestampQuerySet extends TrackedObject {
         private record InflightRequest(int[] queries, int[] meta, TimingDataConsumer callback) {
             private boolean callbackIfReady(IntArrayFIFOQueue queryPool) {
-                boolean ready = glGetQueryObjecti(this.queries[this.queries.length-1], GL_QUERY_RESULT_AVAILABLE) == GL_TRUE;
+                // Evitar GL_QUERY_RESULT_AVAILABLE em llvmpipe, é muito lento
+                boolean ready = !Capabilities.INSTANCE.isLowEndGPU && glGetQueryObjecti(this.queries[this.queries.length-1], GL_QUERY_RESULT_AVAILABLE) == GL_TRUE;
+                
+                // Em llvmpipe, usar non-blocking query se disponível
+                if (!ready && Capabilities.INSTANCE.isLowEndGPU) {
+                    try {
+                        long result = glGetQueryObjecti64(this.queries[this.queries.length-1], GL_QUERY_RESULT_NO_WAIT);
+                        ready = true;
+                    } catch (Exception e) {
+                        ready = false;
+                    }
+                }
+
                 if (!ready) {
                     return false;
                 }
+
                 long[] results = new long[this.queries.length];
                 for (int i = 0; i < this.queries.length; i++) {
                     results[i] = glGetQueryObjecti64(this.queries[i], GL_QUERY_RESULT);

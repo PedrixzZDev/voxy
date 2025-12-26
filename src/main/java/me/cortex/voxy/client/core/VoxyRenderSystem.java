@@ -80,8 +80,10 @@ public class VoxyRenderSystem {
 
         //Fking HATE EVERYTHING AAAAAAAAAAAAAAAA
         int[] oldBufferBindings = new int[10];
-        for (int i = 0; i < oldBufferBindings.length; i++) {
-            oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
+        if (!Capabilities.INSTANCE.isLowEndGPU) {
+            for (int i = 0; i < oldBufferBindings.length; i++) {
+                oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
+            }
         }
 
         try {
@@ -214,10 +216,12 @@ public class VoxyRenderSystem {
         GPUTiming.INSTANCE.marker();//Start marker
         TimingStatistics.main.start();
 
-        //TODO: optimize
+        //TODO: optimize - evitar glGetInteger em llvmpipe
         int[] oldBufferBindings = new int[10];
-        for (int i = 0; i < oldBufferBindings.length; i++) {
-            oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
+        if (!Capabilities.INSTANCE.isLowEndGPU) {
+            for (int i = 0; i < oldBufferBindings.length; i++) {
+                oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
+            }
         }
 
 
@@ -225,7 +229,9 @@ public class VoxyRenderSystem {
         int boundFB = oldFB;
 
         int[] dims = new int[4];
-        glGetIntegerv(GL_VIEWPORT, dims);
+        if (!Capabilities.INSTANCE.isLowEndGPU) {
+            glGetIntegerv(GL_VIEWPORT, dims);
+        }
 
         glViewport(0,0, viewport.width, viewport.height);
 

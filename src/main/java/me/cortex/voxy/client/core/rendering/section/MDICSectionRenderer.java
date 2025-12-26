@@ -251,8 +251,15 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, viewport.drawCountCallBuffer.id);
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, viewport.getRenderList().id);
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            // Otimização para llvmpipe: usar barrier mínimo
+            if (!Capabilities.INSTANCE.isLowEndGPU) {
+                glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            }
             glDispatchCompute(1,1,1);
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            if (!Capabilities.INSTANCE.isLowEndGPU) {
+                glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            }
         }
 
         {//Test occlusion
@@ -300,8 +307,14 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
 
             glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, viewport.drawCountCallBuffer.id);
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            if (!Capabilities.INSTANCE.isLowEndGPU) {
+                glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            }
             glDispatchComputeIndirect(0);
             glMemoryBarrier(GL_COMMAND_BARRIER_BIT|GL_SHADER_STORAGE_BARRIER_BIT);
+            if (!Capabilities.INSTANCE.isLowEndGPU) {
+                glMemoryBarrier(GL_COMMAND_BARRIER_BIT|GL_SHADER_STORAGE_BARRIER_BIT);
+            }
 
             if (RenderStatistics.enabled) {
                 DownloadStream.INSTANCE.download(this.statisticsBuffer, down->{
@@ -321,8 +334,14 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
             this.prefixSumShader.bind();
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, this.distanceCountBuffer.id);
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);//Am unsure if is needed
+            if (!Capabilities.INSTANCE.isLowEndGPU) {
+                glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);//Am unsure if is needed
+            }
             glDispatchCompute(1,1,1);
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            if (!Capabilities.INSTANCE.isLowEndGPU) {
+                glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            }
 
             this.translucentGenShader.bind();
             glBindBufferBase(GL_UNIFORM_BUFFER, 0, this.uniform.id);
@@ -334,8 +353,14 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
 
             glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, viewport.drawCountCallBuffer.id);//This isnt great but its a nice trick to bound it, even if its inefficent ;-;
             glMemoryBarrier(GL_COMMAND_BARRIER_BIT|GL_SHADER_STORAGE_BARRIER_BIT|GL_UNIFORM_BARRIER_BIT);
+            if (!Capabilities.INSTANCE.isLowEndGPU) {
+                glMemoryBarrier(GL_COMMAND_BARRIER_BIT|GL_SHADER_STORAGE_BARRIER_BIT|GL_UNIFORM_BARRIER_BIT);
+            }
             glDispatchComputeIndirect(0);
             glMemoryBarrier(GL_COMMAND_BARRIER_BIT|GL_SHADER_STORAGE_BARRIER_BIT);
+            if (!Capabilities.INSTANCE.isLowEndGPU) {
+                glMemoryBarrier(GL_COMMAND_BARRIER_BIT|GL_SHADER_STORAGE_BARRIER_BIT);
+            }
         }
 
     }

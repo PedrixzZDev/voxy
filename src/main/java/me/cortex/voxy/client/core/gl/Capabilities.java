@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core.gl;
 
 import me.cortex.voxy.client.core.gl.shader.ShaderType;
+import java.util.Locale;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL20C;
 
@@ -27,6 +28,11 @@ public class Capabilities {
     public final boolean subgroup;
     public final boolean sparseBuffer;
     public final boolean isNvidia;
+    public final boolean isAmd;
+    public final boolean nvBarryCoords;
+    public final boolean hasBrokenDepthSampler;
+    public final boolean isLlvmPipe;//Software rasterizer detection
+    public final boolean isLowEndGPU;
 
     public Capabilities() {
         var cap = GL.getCapabilities();
@@ -62,9 +68,16 @@ public class Capabilities {
 
         this.ssboMaxSize = glGetInteger64(GL_MAX_SHADER_STORAGE_BLOCK_SIZE);
 
-        this.isMesa = glGetString(GL_VERSION).toLowerCase().contains("mesa");
-        this.isIntel = glGetString(GL_VENDOR).toLowerCase().contains("intel");
-        this.isNvidia = glGetString(GL_VENDOR).toLowerCase().contains("nvidia");
+        this.isMesa = glGetString(GL_VERSION).toLowerCase(Locale.ROOT).contains("mesa");
+        String renderer = glGetString(GL_RENDERER).toLowerCase(Locale.ROOT);
+        var vendor = glGetString(GL_VENDOR).toLowerCase(Locale.ROOT);
+        this.isIntel = vendor.contains("intel");
+        this.isNvidia = vendor.contains("nvidia");
+        this.isAmd = vendor.contains("amd")||vendor.contains("radeon");
+        
+        // Detectar software rasterizers (CPU rendering)
+        this.isLlvmPipe = renderer.contains("llvmpipe") || renderer.contains("software");
+        this.isLowEndGPU = this.isLlvmPipe || this.isMesa || (this.isIntel && !vendor.contains("arc"));
 
         if (this.canQueryGpuMemory) {
             this.totalDedicatedMemory = glGetInteger64(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX)*1024;//Since its in Kb
