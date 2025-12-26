@@ -57,6 +57,10 @@ public abstract class VoxyInstance {
         this.worldCleaner.start();
     }
 
+    protected void setNumThreads(int threads) {
+        Logger.info("setNumThreads called with " + threads + " (no-op)");
+    }
+
     public void updateDedicatedThreads() {
         this.setNumThreads(3);
         // Ajustar número de threads baseado na plataforma
