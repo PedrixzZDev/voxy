@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core.rendering.util;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.gl.GlFence;
 import me.cortex.voxy.client.core.gl.GlPersistentMappedBuffer;
@@ -76,7 +77,13 @@ public class DownloadStream {
                 this.commit();
                 int attempts = 10;
                 while (--attempts != 0 && this.caddr == SIZE_LIMIT) {
-                    glFinish();
+                    // Otimização para llvmpipe/CPU rendering
+                    if (Capabilities.INSTANCE.isLowEndGPU) {
+                        glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+                        Thread.yield();
+                    } else {
+                        glFinish();
+                    }
                     this.tick();
                     this.caddr = this.allocationArena.alloc((int) size);
                 }
@@ -150,9 +157,19 @@ public class DownloadStream {
 
     //Synchonize force flushes everything
     public void waitDiscard() {
-        glFinish();
+        if (Capabilities.INSTANCE.isLowEndGPU) {
+            glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT | GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
+            Thread.yield();
+        } else {
+            glFinish();
+        }
         var fence = new GlFence();
-        glFinish();
+        if (Capabilities.INSTANCE.isLowEndGPU) {
+            glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+            Thread.yield();
+        } else {
+            glFinish();
+        }
         while (!fence.signaled())
             Thread.onSpinWait();
         fence.free();
@@ -165,10 +182,20 @@ public class DownloadStream {
     }
 
     public void flushWaitClear() {
-        glFinish();
+        if (Capabilities.INSTANCE.isLowEndGPU) {
+            glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+            Thread.yield();
+        } else {
+            glFinish();
+        }
         this.tick();
         var fence = new GlFence();
-        glFinish();
+        if (Capabilities.INSTANCE.isLowEndGPU) {
+            glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+            Thread.yield();
+        } else {
+            glFinish();
+        }
         while (!fence.signaled())
             Thread.onSpinWait();
         fence.free();

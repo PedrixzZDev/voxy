@@ -3,6 +3,7 @@ package me.cortex.voxy.client.config;
 import com.google.gson.FieldNamingPolicy;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.util.cpu.CpuLayout;
 import me.cortex.voxy.commonImpl.VoxyCommon;
@@ -31,6 +32,10 @@ public class VoxyConfig {
     public float subDivisionSize = 64;
     public boolean useEnvironmentalFog = true;
     public boolean dontUseSodiumBuilderThreads = false;
+    // Otimizações para llvmpipe/low-end GPUs
+    public int maxDrawCallsPerFrame = 10000;
+    public boolean enableChunkCulling = true;
+    public int lodBias = 0;
 
     private static VoxyConfig loadOrCreate() {
         if (VoxyCommon.isAvailable()) {

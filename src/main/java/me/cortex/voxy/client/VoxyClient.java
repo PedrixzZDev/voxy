@@ -34,6 +34,11 @@ public class VoxyClient implements ClientModInitializer {
             Logger.error("AMD broken depth sampler detected, voxy does not work correctly and has been disabled, this will hopefully be fixed in the future");
         }
 
+        if (Capabilities.INSTANCE.isLlvmPipe) {
+            Logger.warn("Llvmpipe (software rasterizer) detected! Enabling performance optimizations for CPU rendering...");
+            Logger.warn("For better performance, consider using native GPU drivers");
+        }
+
         boolean systemSupported = Capabilities.INSTANCE.compute && Capabilities.INSTANCE.indirectParameters && !Capabilities.INSTANCE.hasBrokenDepthSampler;
         if (systemSupported) {
 
@@ -44,6 +49,10 @@ public class VoxyClient implements ClientModInitializer {
 
             if (!Capabilities.INSTANCE.subgroup) {
                 Logger.warn("GPU does not support subgroup operations, expect some performance degradation");
+            }
+            
+            if (Capabilities.INSTANCE.isLowEndGPU) {
+                Logger.info("Low-end GPU detected, enabling aggressive optimizations");
             }
 
         } else {

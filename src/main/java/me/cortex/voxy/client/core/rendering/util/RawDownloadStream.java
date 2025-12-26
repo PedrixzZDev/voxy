@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core.rendering.util;
 
 
+import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.gl.GlFence;
 import me.cortex.voxy.client.core.gl.GlPersistentMappedBuffer;
 import me.cortex.voxy.common.Logger;
@@ -12,6 +13,8 @@ import java.util.Deque;
 
 import static org.lwjgl.opengl.ARBMapBufferRange.GL_MAP_READ_BIT;
 import static org.lwjgl.opengl.GL11.glFinish;
+import static org.lwjgl.opengl.GL42.glMemoryBarrier;
+import static org.lwjgl.opengl.GL42C.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT;
 import static org.lwjgl.opengl.GL44.GL_MAP_COHERENT_BIT;
 
 //Special download stream which allows access to the download buffer directly
@@ -36,7 +39,13 @@ public class RawDownloadStream {
         if (allocation == AllocationArena.SIZE_LIMIT) {
             Logger.warn("Raw download stream full, preemptively committing, this could cause bad things to happen");
             //Hit the download limit, attempt to free
-            glFinish();
+            // Usar memory barrier em vez de glFinish para software rasterizers
+            if (Capabilities.INSTANCE.isLowEndGPU) {
+                glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+                Thread.yield();
+            } else {
+                glFinish();
+            }
             this.tick();
             allocation = (int) this.allocationArena.alloc(size);
             if (allocation == AllocationArena.SIZE_LIMIT) {
