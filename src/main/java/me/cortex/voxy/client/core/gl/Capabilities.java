@@ -75,6 +75,9 @@ public class Capabilities {
         this.isNvidia = vendor.contains("nvidia");
         this.isAmd = vendor.contains("amd")||vendor.contains("radeon");
         
+        // Fallbacks / basic checks
+        this.nvBarryCoords = false;
+        this.hasBrokenDepthSampler = false;
         // Detectar software rasterizers (CPU rendering)
         this.isLlvmPipe = renderer.contains("llvmpipe") || renderer.contains("software");
         this.isLowEndGPU = this.isLlvmPipe || this.isMesa || (this.isIntel && !vendor.contains("arc"));
