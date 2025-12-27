@@ -36,7 +36,6 @@ public class HierarchicalOcclusionTraverser {
 
 
     private static final int MAX_ITERATIONS = WorldEngine.MAX_LOD_LAYER+1;
-    private static final int LOCAL_WORK_SIZE_BITS = 5;
 
     private final AsyncNodeManager nodeManager;
     private final NodeCleaner nodeCleaner;
@@ -71,11 +70,40 @@ public class HierarchicalOcclusionTraverser {
 
     private final int hizSampler = glGenSamplers();
 
-    private final AutoBindingShader traversal = Shader.makeAuto(PRINTF_processor)
+    private final AutoBindingShader traversal;
+    private final int localWorkBits;
+    private final int requestQueueSize;
+
+
+    public HierarchicalOcclusionTraverser(AsyncNodeManager nodeManager, NodeCleaner nodeCleaner, RenderGenerationService meshGen) {
+        this.nodeCleaner = nodeCleaner;
+        this.nodeManager = nodeManager;
+        this.meshGen = meshGen;
+        this.nodeBuffer = new GlBuffer(nodeManager.maxNodeCount*16L).fill(-1);
+
+        // Adjust workgroup and queue sizes for software rasterizers
+        if (me.cortex.voxy.client.core.gl.Capabilities.INSTANCE.isLlvmPipe) {
+            this.localWorkBits = 3; // smaller local work size helps CPU rasterizers
+            this.requestQueueSize = Math.max(8, MAX_REQUEST_QUEUE_SIZE / 4);
+            me.cortex.voxy.common.Logger.info("llvmpipe detected: using reduced local work size and request queue");
+        } else {
+            this.localWorkBits = 5;
+            this.requestQueueSize = MAX_REQUEST_QUEUE_SIZE;
+        }
+
+        this.requestBuffer = new GlBuffer(this.requestQueueSize*8L+8).zero();
+
+
+        glSamplerParameteri(this.hizSampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+        glSamplerParameteri(this.hizSampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glSamplerParameteri(this.hizSampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glSamplerParameteri(this.hizSampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+
+        this.traversal = Shader.makeAuto(PRINTF_processor)
             .defineIf("DEBUG", HIERARCHICAL_SHADER_DEBUG)
             .define("MAX_ITERATIONS", MAX_ITERATIONS)
-            .define("LOCAL_SIZE_BITS", LOCAL_WORK_SIZE_BITS)
-            .define("MAX_REQUEST_QUEUE_SIZE", MAX_REQUEST_QUEUE_SIZE)
+            .define("LOCAL_SIZE_BITS", this.localWorkBits)
+            .define("MAX_REQUEST_QUEUE_SIZE", this.requestQueueSize)
 
             .define("HIZ_BINDING", 0)
 
@@ -97,27 +125,13 @@ public class HierarchicalOcclusionTraverser {
             .add(ShaderType.COMPUTE, "voxy:lod/hierarchical/traversal_dev.comp")
             .compile();
 
-
-    public HierarchicalOcclusionTraverser(AsyncNodeManager nodeManager, NodeCleaner nodeCleaner, RenderGenerationService meshGen) {
-        this.nodeCleaner = nodeCleaner;
-        this.nodeManager = nodeManager;
-        this.meshGen = meshGen;
-        this.requestBuffer = new GlBuffer(MAX_REQUEST_QUEUE_SIZE*8L+8).zero();
-        this.nodeBuffer = new GlBuffer(nodeManager.maxNodeCount*16L).fill(-1);
-
-
-        glSamplerParameteri(this.hizSampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-        glSamplerParameteri(this.hizSampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glSamplerParameteri(this.hizSampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glSamplerParameteri(this.hizSampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-
         this.traversal
-                .ubo("SCENE_UNIFORM_BINDING", this.uniformBuffer)
-                .ssbo("REQUEST_QUEUE_BINDING", this.requestBuffer)
-                .ssbo("NODE_DATA_BINDING", this.nodeBuffer)
-                .ssbo("NODE_QUEUE_META_BINDING", this.queueMetaBuffer)
-                .ssbo("RENDER_TRACKER_BINDING", this.nodeCleaner.visibilityBuffer)
-                .ssboIf("STATISTICS_BUFFER_BINDING", this.statisticsBuffer);
+            .ubo("SCENE_UNIFORM_BINDING", this.uniformBuffer)
+            .ssbo("REQUEST_QUEUE_BINDING", this.requestBuffer)
+            .ssbo("NODE_DATA_BINDING", this.nodeBuffer)
+            .ssbo("NODE_QUEUE_META_BINDING", this.queueMetaBuffer)
+            .ssbo("RENDER_TRACKER_BINDING", this.nodeCleaner.visibilityBuffer)
+            .ssboIf("STATISTICS_BUFFER_BINDING", this.statisticsBuffer);
 
         this.topNode2idxMapping.defaultReturnValue(-1);
         this.nodeManager.setTLNAddRemoveCallbacks(this::addTLN, this::remTLN);
@@ -263,7 +277,7 @@ public class HierarchicalOcclusionTraverser {
             glPixelStorei(GL_UNPACK_SKIP_IMAGES, 0);
         }
 
-        int firstDispatchSize = (this.topNodeCount+(1<<LOCAL_WORK_SIZE_BITS)-1)>>LOCAL_WORK_SIZE_BITS;
+        int firstDispatchSize = (this.topNodeCount+(1<<this.localWorkBits)-1)>>this.localWorkBits;
         /*
         //prime the queue Todo: maybe move after the traversal? cause then it is more efficient work since it doesnt need to wait for this before starting?
         glClearNamedBufferData(this.queueMetaBuffer.id, GL_RGBA32UI, GL_RGBA, GL_UNSIGNED_INT, new int[]{0,1,1,0});//Prime the metadata buffer, which also contains
@@ -309,7 +323,12 @@ public class HierarchicalOcclusionTraverser {
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
 
             //Dispatch and barrier
-            glDispatchComputeIndirect(iter * 4 * 4);
+            if (me.cortex.voxy.client.core.gl.Capabilities.INSTANCE.isLlvmPipe) {
+                // Avoid indirect dispatch on software rasterizers — use direct dispatch with conservative workgroup count
+                glDispatchCompute(firstDispatchSize, 1, 1);
+            } else {
+                glDispatchComputeIndirect(iter * 4 * 4);
+            }
         }
 
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
